@@ -2,6 +2,34 @@
  * GitHub CLI wrappers for project operations.
  */
 
+import { spawn } from "child_process";
+
+/**
+ * Helper to run a command and capture stdout/stderr.
+ */
+function runCommand(
+  command: string,
+  args: string[]
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    const proc = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+
+    proc.stdout.on("data", (data) => {
+      stdout += data.toString();
+    });
+
+    proc.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+
+    proc.on("close", (code) => {
+      resolve({ exitCode: code ?? 1, stdout, stderr });
+    });
+  });
+}
+
 export type GhGetLoggedInUserResult =
   | { success: true; login: string }
   | { success: false; error: "not_logged_in" | "other"; message: string };
@@ -10,14 +38,9 @@ export type GhGetLoggedInUserResult =
  * Get the currently logged-in GitHub user.
  */
 export async function ghGetLoggedInUser(): Promise<GhGetLoggedInUserResult> {
-  const proc = Bun.spawn(["gh", "api", "user", "--jq", ".login"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const { exitCode, stdout, stderr } = await runCommand("gh", ["api", "user", "--jq", ".login"]);
 
-  const exitCode = await proc.exited;
   if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
     if (stderr.includes("not logged in") || stderr.includes("auth login")) {
       return {
         success: false,
@@ -32,7 +55,6 @@ export async function ghGetLoggedInUser(): Promise<GhGetLoggedInUserResult> {
     };
   }
 
-  const stdout = await new Response(proc.stdout).text();
   return { success: true, login: stdout.trim() };
 }
 
@@ -63,14 +85,11 @@ export async function ghProjectView(
   owner: string,
   number: number
 ): Promise<GhProjectViewResult> {
-  const proc = Bun.spawn(
-    ["gh", "project", "view", String(number), "--owner", owner, "--format", "json"],
-    { stdout: "pipe", stderr: "pipe" }
-  );
+  const { exitCode, stdout, stderr } = await runCommand("gh", [
+    "project", "view", String(number), "--owner", owner, "--format", "json"
+  ]);
 
-  const exitCode = await proc.exited;
   if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
     if (stderr.includes("Could not resolve to a ProjectV2")) {
       return {
         success: false,
@@ -92,7 +111,6 @@ export async function ghProjectView(
     };
   }
 
-  const stdout = await new Response(proc.stdout).text();
   const data = JSON.parse(stdout);
 
   return {
@@ -117,14 +135,11 @@ export async function ghProjectItemList(
   owner: string,
   number: number
 ): Promise<GhProjectItemListResult> {
-  const proc = Bun.spawn(
-    ["gh", "project", "item-list", String(number), "--owner", owner, "--format", "json", "--limit", "1000"],
-    { stdout: "pipe", stderr: "pipe" }
-  );
+  const { exitCode, stdout, stderr } = await runCommand("gh", [
+    "project", "item-list", String(number), "--owner", owner, "--format", "json", "--limit", "1000"
+  ]);
 
-  const exitCode = await proc.exited;
   if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
     if (stderr.includes("Could not resolve to a ProjectV2")) {
       return {
         success: false,
@@ -146,7 +161,6 @@ export async function ghProjectItemList(
     };
   }
 
-  const stdout = await new Response(proc.stdout).text();
   const data = JSON.parse(stdout);
 
   const items: ProjectItem[] = data.items.map((item: Record<string, unknown>) => ({
@@ -174,14 +188,11 @@ export async function ghCreateItem(
   title: string,
   body: string
 ): Promise<GhCreateItemResult> {
-  const proc = Bun.spawn(
-    ["gh", "project", "item-create", String(projectNumber), "--owner", owner, "--title", title, "--body", body, "--format", "json"],
-    { stdout: "pipe", stderr: "pipe" }
-  );
+  const { exitCode, stdout, stderr } = await runCommand("gh", [
+    "project", "item-create", String(projectNumber), "--owner", owner, "--title", title, "--body", body, "--format", "json"
+  ]);
 
-  const exitCode = await proc.exited;
   if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
     if (stderr.includes("missing required scopes")) {
       return {
         success: false,
@@ -192,7 +203,6 @@ export async function ghCreateItem(
     return { success: false, error: "other", message: stderr.trim() };
   }
 
-  const stdout = await new Response(proc.stdout).text();
   const data = JSON.parse(stdout);
 
   // item-create returns itemId but we need contentId from item-list
@@ -213,14 +223,11 @@ export async function ghUpdateDraftIssue(
   title: string,
   body: string
 ): Promise<GhUpdateDraftIssueResult> {
-  const proc = Bun.spawn(
-    ["gh", "project", "item-edit", "--id", contentId, "--title", title, "--body", body, "--format", "json"],
-    { stdout: "pipe", stderr: "pipe" }
-  );
+  const { exitCode, stderr } = await runCommand("gh", [
+    "project", "item-edit", "--id", contentId, "--title", title, "--body", body, "--format", "json"
+  ]);
 
-  const exitCode = await proc.exited;
   if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
     if (stderr.includes("ID must be the ID of the draft issue")) {
       return {
         success: false,
@@ -245,14 +252,11 @@ export async function ghCreateProject(
   owner: string,
   title: string
 ): Promise<GhCreateProjectResult> {
-  const proc = Bun.spawn(
-    ["gh", "project", "create", "--owner", owner, "--title", title, "--format", "json"],
-    { stdout: "pipe", stderr: "pipe" }
-  );
+  const { exitCode, stdout, stderr } = await runCommand("gh", [
+    "project", "create", "--owner", owner, "--title", title, "--format", "json"
+  ]);
 
-  const exitCode = await proc.exited;
   if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
     if (stderr.includes("missing required scopes")) {
       return {
         success: false,
@@ -263,7 +267,6 @@ export async function ghCreateProject(
     return { success: false, error: "other", message: stderr.trim() };
   }
 
-  const stdout = await new Response(proc.stdout).text();
   const data = JSON.parse(stdout);
 
   return {
@@ -288,14 +291,11 @@ export async function ghDeleteProject(
   owner: string,
   number: number
 ): Promise<GhDeleteProjectResult> {
-  const proc = Bun.spawn(
-    ["gh", "project", "delete", String(number), "--owner", owner, "--format", "json"],
-    { stdout: "pipe", stderr: "pipe" }
-  );
+  const { exitCode, stderr } = await runCommand("gh", [
+    "project", "delete", String(number), "--owner", owner, "--format", "json"
+  ]);
 
-  const exitCode = await proc.exited;
   if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
     if (stderr.includes("Could not resolve")) {
       return {
         success: false,
@@ -319,14 +319,11 @@ export type GhProjectListResult =
 export async function ghProjectList(
   owner: string
 ): Promise<GhProjectListResult> {
-  const proc = Bun.spawn(
-    ["gh", "project", "list", "--owner", owner, "--format", "json", "--limit", "100"],
-    { stdout: "pipe", stderr: "pipe" }
-  );
+  const { exitCode, stdout, stderr } = await runCommand("gh", [
+    "project", "list", "--owner", owner, "--format", "json", "--limit", "100"
+  ]);
 
-  const exitCode = await proc.exited;
   if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
     if (stderr.includes("missing required scopes")) {
       return {
         success: false,
@@ -341,7 +338,6 @@ export async function ghProjectList(
     };
   }
 
-  const stdout = await new Response(proc.stdout).text();
   const data = JSON.parse(stdout);
 
   const projects: ProjectInfo[] = data.projects.map((p: Record<string, unknown>) => ({
@@ -366,14 +362,11 @@ export async function ghDeleteItem(
   projectNumber: number,
   itemId: string
 ): Promise<GhDeleteItemResult> {
-  const proc = Bun.spawn(
-    ["gh", "project", "item-delete", String(projectNumber), "--owner", owner, "--id", itemId, "--format", "json"],
-    { stdout: "pipe", stderr: "pipe" }
-  );
+  const { exitCode, stderr } = await runCommand("gh", [
+    "project", "item-delete", String(projectNumber), "--owner", owner, "--id", itemId, "--format", "json"
+  ]);
 
-  const exitCode = await proc.exited;
   if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
     if (stderr.includes("Could not resolve")) {
       return {
         success: false,

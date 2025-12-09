@@ -1,8 +1,39 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { mkdir, writeFile, readFile, rm } from "fs/promises";
 import { join } from "path";
+import { spawn } from "child_process";
 import { ghProjectItemList, ghDeleteItem } from "./github.js";
 import { parseMarkdownString } from "./markdown.js";
+
+/**
+ * Helper to run a command and capture stdout/stderr.
+ */
+function runCommand(
+  command: string,
+  args: string[],
+  options: { cwd?: string } = {}
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    const proc = spawn(command, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      cwd: options.cwd
+    });
+    let stdout = "";
+    let stderr = "";
+
+    proc.stdout.on("data", (data) => {
+      stdout += data.toString();
+    });
+
+    proc.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+
+    proc.on("close", (code) => {
+      resolve({ exitCode: code ?? 1, stdout, stderr });
+    });
+  });
+}
 
 // Test project: ben-pr-p/2 (Test Roadmap)
 const TEST_OWNER = "ben-pr-p";
@@ -61,14 +92,11 @@ ${body}`;
     await writeFile(join(projectDir, filename), content);
 
     // Run the CLI push command
-    const proc = Bun.spawn(["bun", "run", "source/cli.tsx", "push", `${TEST_OWNER}/${TEST_PROJECT_NUMBER}`, "--base-dir", testDir], {
-      stdout: "pipe",
-      stderr: "pipe",
-      cwd: process.cwd(),
-    });
-
-    await proc.exited;
-    const stdout = await new Response(proc.stdout).text();
+    const { stdout } = await runCommand(
+      "bun",
+      ["run", "source/cli.tsx", "push", `${TEST_OWNER}/${TEST_PROJECT_NUMBER}`, "--base-dir", testDir],
+      { cwd: process.cwd() }
+    );
 
     // Check the output shows 1 created
     expect(stdout).toContain("1 created");
@@ -113,14 +141,11 @@ This item was deleted on GitHub.`;
     await writeFile(join(projectDir, filename), content);
 
     // Run the CLI push command
-    const proc = Bun.spawn(["bun", "run", "source/cli.tsx", "push", `${TEST_OWNER}/${TEST_PROJECT_NUMBER}`, "--base-dir", testDir], {
-      stdout: "pipe",
-      stderr: "pipe",
-      cwd: process.cwd(),
-    });
-
-    await proc.exited;
-    const stdout = await new Response(proc.stdout).text();
+    const { stdout } = await runCommand(
+      "bun",
+      ["run", "source/cli.tsx", "push", `${TEST_OWNER}/${TEST_PROJECT_NUMBER}`, "--base-dir", testDir],
+      { cwd: process.cwd() }
+    );
 
     // Should count as unchanged (skipped), not created
     expect(stdout).toContain("0 created");
@@ -142,14 +167,11 @@ ${body}`;
     await writeFile(join(projectDir, filename), content);
 
     // Run the CLI push command
-    const proc = Bun.spawn(["bun", "run", "source/cli.tsx", "push", `${TEST_OWNER}/${TEST_PROJECT_NUMBER}`, "--base-dir", testDir], {
-      stdout: "pipe",
-      stderr: "pipe",
-      cwd: process.cwd(),
-    });
-
-    await proc.exited;
-    const stdout = await new Response(proc.stdout).text();
+    const { stdout } = await runCommand(
+      "bun",
+      ["run", "source/cli.tsx", "push", `${TEST_OWNER}/${TEST_PROJECT_NUMBER}`, "--base-dir", testDir],
+      { cwd: process.cwd() }
+    );
 
     expect(stdout).toContain("1 created");
 

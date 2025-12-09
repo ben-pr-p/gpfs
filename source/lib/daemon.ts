@@ -326,7 +326,6 @@ export async function pushFile(
 export class DaemonRunner {
   private config: DaemonConfig;
   private running = false;
-  private watcher: ReturnType<typeof Bun.file> | null = null;
   private pendingChanges = new Map<string, NodeJS.Timeout>();
   private pollTimer: NodeJS.Timeout | null = null;
 
