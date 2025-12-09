@@ -1,0 +1,28 @@
+{
+  "name": "gh-project-file-sync",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "gh-project-file-sync": "./source/cli.tsx"
+  },
+  "scripts": {
+    "dev": "bun run source/cli.tsx",
+    "build": "bunx tsc",
+    "start": "node dist/cli.js"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.2.7"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "^1.4.2-r.1",
+    "ink": "^6.5.1",
+    "pastel": "^4.0.0",
+    "react": "^19.2.1",
+    "zod": "^4.1.13"
+  }
+}
