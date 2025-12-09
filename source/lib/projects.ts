@@ -51,7 +51,7 @@ export async function getTrackedProjects(
     for (const projectDir of ownerEntries) {
       // Parse project directory name: <number>-<name>
       const match = projectDir.match(/^(\d+)-(.+)$/);
-      if (!match) continue;
+      if (!match || !match[1] || !match[2]) continue;
 
       const projectNumber = parseInt(match[1], 10);
       const projectName = match[2];

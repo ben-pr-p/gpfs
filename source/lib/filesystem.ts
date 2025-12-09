@@ -15,7 +15,7 @@ export function parseProjectIdentifier(
   identifier: string
 ): ProjectIdentifier | null {
   const match = identifier.match(/^([^/]+)\/(\d+)$/);
-  if (!match) {
+  if (!match || !match[1] || !match[2]) {
     return null;
   }
   return {

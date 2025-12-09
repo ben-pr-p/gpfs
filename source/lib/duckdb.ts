@@ -123,7 +123,14 @@ export async function executeQuery(
     const conn = await instance.connect();
 
     // Create table from items
-    const columns = Object.keys(items[0]);
+    const firstItem = items[0];
+    if (!firstItem) {
+      return {
+        success: true,
+        result: { columns: [], rows: [] },
+      };
+    }
+    const columns = Object.keys(firstItem);
     const columnDefs = columns
       .map((col) => {
         // Determine column type from first non-null value
@@ -155,7 +162,10 @@ export async function executeQuery(
     const resultRows = reader.getRows().map((row) => {
       const obj: Record<string, unknown> = {};
       for (let i = 0; i < resultColumns.length; i++) {
-        obj[resultColumns[i]] = row[i];
+        const colName = resultColumns[i];
+        if (colName !== undefined) {
+          obj[colName] = row[i];
+        }
       }
       return obj;
     });

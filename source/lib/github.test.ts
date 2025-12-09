@@ -48,10 +48,11 @@ describe("ghProjectItemList", () => {
 
       // Check item structure
       const item = result.items[0];
-      expect(item.id).toMatch(/^PVTI_/);
-      expect(typeof item.title).toBe("string");
-      expect(typeof item.body).toBe("string");
-      expect(item.contentType).toBe("DraftIssue");
+      expect(item).toBeDefined();
+      expect(item!.id).toMatch(/^PVTI_/);
+      expect(typeof item!.title).toBe("string");
+      expect(typeof item!.body).toBe("string");
+      expect(item!.contentType).toBe("DraftIssue");
     }
   });
 

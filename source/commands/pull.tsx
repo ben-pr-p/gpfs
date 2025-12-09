@@ -172,9 +172,10 @@ async function pullProject(project: TrackedProject): Promise<PullResult> {
     const filePath = join(project.path, filename);
     const parsed = await parseMarkdownFile(filePath);
     if (parsed && parsed.frontmatter.id) {
-      localItemMap.set(parsed.frontmatter.id, {
+      const sync = parsed.frontmatter._sync as Record<string, unknown> | undefined;
+      localItemMap.set(parsed.frontmatter.id as string, {
         filename,
-        checksum: parsed.frontmatter._sync?.local_checksum || "",
+        checksum: (sync?.local_checksum as string) || "",
       });
     }
   }

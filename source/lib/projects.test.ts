@@ -54,7 +54,7 @@ describe("getTrackedProjects", () => {
     const result = await getTrackedProjects(testDir);
 
     expect(result).toHaveLength(1);
-    expect(result[0].itemCount).toBe(2);
+    expect(result[0]!.itemCount).toBe(2);
   });
 
   it("ignores directories that don't match pattern", async () => {
@@ -70,7 +70,7 @@ describe("getTrackedProjects", () => {
     const result = await getTrackedProjects(testDir);
 
     expect(result).toHaveLength(1);
-    expect(result[0].name).toBe("valid");
+    expect(result[0]!.name).toBe("valid");
   });
 
   it("sorts by owner then project number", async () => {
@@ -96,7 +96,7 @@ describe("getTrackedProjects", () => {
     const result = await getTrackedProjects(testDir);
 
     expect(result).toHaveLength(1);
-    expect(result[0].owner).toBe("org");
+    expect(result[0]!.owner).toBe("org");
   });
 
   it("handles project names with multiple dashes", async () => {
@@ -106,7 +106,7 @@ describe("getTrackedProjects", () => {
     const result = await getTrackedProjects(testDir);
 
     expect(result).toHaveLength(1);
-    expect(result[0].number).toBe(42);
-    expect(result[0].name).toBe("my-cool-project");
+    expect(result[0]!.number).toBe(42);
+    expect(result[0]!.name).toBe("my-cool-project");
   });
 });

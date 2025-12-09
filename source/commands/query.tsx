@@ -127,10 +127,10 @@ function TableOutput({
   };
 
   const headerRow = columns
-    .map((col) => formatCell(col, columnWidths[col]))
+    .map((col) => formatCell(col, columnWidths[col] ?? 0))
     .join(" │ ");
   const separator = columns
-    .map((col) => "─".repeat(columnWidths[col]))
+    .map((col) => "─".repeat(columnWidths[col] ?? 0))
     .join("─┼─");
 
   return (
@@ -140,7 +140,7 @@ function TableOutput({
       {rows.map((row, i) => (
         <Text key={i}>
           {columns
-            .map((col) => formatCell(formatValue(row[col]), columnWidths[col]))
+            .map((col) => formatCell(formatValue(row[col]), columnWidths[col] ?? 0))
             .join(" │ ")}
         </Text>
       ))}

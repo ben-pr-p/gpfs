@@ -143,6 +143,10 @@ function parseYaml(yaml: string): Record<string, unknown> {
 
   while (i < lines.length) {
     const line = lines[i];
+    if (line === undefined) {
+      i++;
+      continue;
+    }
 
     // Skip empty lines
     if (line.trim() === "") {
@@ -151,7 +155,7 @@ function parseYaml(yaml: string): Record<string, unknown> {
     }
 
     // Get indentation level
-    const indent = line.match(/^(\s*)/)?.[1].length || 0;
+    const indent = line.match(/^(\s*)/)?.[1]?.length ?? 0;
 
     // Parse key-value
     const match = line.match(/^(\s*)([^:]+):\s*(.*)$/);
@@ -160,8 +164,8 @@ function parseYaml(yaml: string): Record<string, unknown> {
       continue;
     }
 
-    const key = match[2].trim();
-    let value: unknown = match[3].trim();
+    const key = match[2]?.trim() ?? "";
+    let value: unknown = match[3]?.trim() ?? "";
 
     // Handle different value types
     if (value === "" || value === undefined) {
@@ -173,9 +177,10 @@ function parseYaml(yaml: string): Record<string, unknown> {
         i++;
         while (i < lines.length) {
           const itemLine = lines[i];
+          if (itemLine === undefined) break;
           const itemMatch = itemLine.match(/^\s+-\s*(.*)$/);
           if (!itemMatch) break;
-          arr.push(parseYamlValue(itemMatch[1]));
+          arr.push(parseYamlValue(itemMatch[1] ?? ""));
           i++;
         }
         result[key] = arr;
@@ -184,10 +189,12 @@ function parseYaml(yaml: string): Record<string, unknown> {
         // It's a nested object
         const nestedLines: string[] = [];
         i++;
-        const baseIndent = lines[i]?.match(/^(\s*)/)?.[1].length || 0;
+        const currentLine = lines[i];
+        const baseIndent = currentLine?.match(/^(\s*)/)?.[1]?.length ?? 0;
         while (i < lines.length) {
           const nestedLine = lines[i];
-          const nestedIndent = nestedLine.match(/^(\s*)/)?.[1].length || 0;
+          if (nestedLine === undefined) break;
+          const nestedIndent = nestedLine.match(/^(\s*)/)?.[1]?.length ?? 0;
           if (nestedLine.trim() === "" || nestedIndent >= baseIndent) {
             nestedLines.push(nestedLine.slice(baseIndent));
             i++;
