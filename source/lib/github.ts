@@ -2,6 +2,40 @@
  * GitHub CLI wrappers for project operations.
  */
 
+export type GhGetLoggedInUserResult =
+  | { success: true; login: string }
+  | { success: false; error: "not_logged_in" | "other"; message: string };
+
+/**
+ * Get the currently logged-in GitHub user.
+ */
+export async function ghGetLoggedInUser(): Promise<GhGetLoggedInUserResult> {
+  const proc = Bun.spawn(["gh", "api", "user", "--jq", ".login"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) {
+    const stderr = await new Response(proc.stderr).text();
+    if (stderr.includes("not logged in") || stderr.includes("auth login")) {
+      return {
+        success: false,
+        error: "not_logged_in",
+        message: "Not logged in to GitHub CLI. Run: gh auth login",
+      };
+    }
+    return {
+      success: false,
+      error: "other",
+      message: `Failed to get logged-in user: ${stderr.trim()}`,
+    };
+  }
+
+  const stdout = await new Response(proc.stdout).text();
+  return { success: true, login: stdout.trim() };
+}
+
 export type ProjectInfo = {
   id: string;
   number: number;

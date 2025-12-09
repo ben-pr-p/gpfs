@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getBaseDir } from "../lib/config.js";
 import { parseProjectIdentifier } from "../lib/filesystem.js";
 import { getTrackedProjects, type TrackedProject } from "../lib/projects.js";
-import { ghProjectView, ghProjectItemList, ghUpdateDraftIssue, ghDeleteItem, type ProjectItem } from "../lib/github.js";
+import { ghProjectView, ghProjectItemList, ghUpdateDraftIssue, ghDeleteItem, ghCreateItem, type ProjectItem } from "../lib/github.js";
 import { parseMarkdownFile, computeChecksum, type ParsedMarkdown } from "../lib/markdown.js";
 import { readdir, unlink } from "fs/promises";
 import { join } from "path";
@@ -185,7 +185,7 @@ async function pushProject(project: TrackedProject, dryRun: boolean): Promise<Pu
   for (const filename of files) {
     const filePath = join(project.path, filename);
     const parsed = await parseMarkdownFile(filePath);
-    if (parsed && parsed.frontmatter.id) {
+    if (parsed) {
       const currentChecksum = computeChecksum(parsed.body);
       localItems.push({ filename, parsed, currentChecksum });
     }
@@ -197,14 +197,14 @@ async function pushProject(project: TrackedProject, dryRun: boolean): Promise<Pu
   let unchanged = 0;
 
   for (const local of localItems) {
-    const itemId = local.parsed.frontmatter.id as string;
+    const itemId = local.parsed.frontmatter.id as string | undefined;
     const isDeleted = local.parsed.frontmatter.deleted === true;
-    const remote = remoteItemsById.get(itemId);
+    const remote = itemId ? remoteItemsById.get(itemId) : undefined;
     const storedChecksum = (local.parsed.frontmatter._sync as Record<string, unknown>)?.local_checksum as string | undefined;
 
     if (isDeleted) {
       // Item marked for deletion locally
-      if (remote) {
+      if (remote && itemId) {
         // Delete from GitHub
         if (!dryRun) {
           await ghDeleteItem(project.owner, project.number, itemId);
@@ -220,19 +220,32 @@ async function pushProject(project: TrackedProject, dryRun: boolean): Promise<Pu
         deleted++;
       }
     } else if (!remote) {
-      // Item doesn't exist remotely - create it
-      // But only if it doesn't have an ID that starts with PVTI_ (which means it was deleted remotely)
-      // For now, we'll skip items that have a PVTI_ ID but don't exist remotely
-      // They may have been deleted on GitHub
-      if (itemId.startsWith("PVTI_")) {
+      // Item doesn't exist remotely - potentially create it
+      if (itemId && itemId.startsWith("PVTI_")) {
         // This item was synced before but is now missing remotely
         // Skip it - user should run pull to get the deleted status
         unchanged++;
       } else {
-        // This is a locally-created item (no PVTI_ ID yet)
-        // We don't support creating new items from local files yet
-        // Items must be created via gpfs create command
-        unchanged++;
+        // This is a locally-created item (no id or non-PVTI_ id)
+        // Create it on GitHub
+        const title = (local.parsed.frontmatter.title as string) || local.filename.replace(/\.md$/, "");
+        const body = local.parsed.body;
+
+        if (!dryRun) {
+          const createResult = await ghCreateItem(project.owner, project.number, title, body);
+          if (!createResult.success) {
+            throw new Error(`Failed to create item: ${createResult.message}`);
+          }
+          // Update local file with the new item ID
+          await updateLocalFileWithId(
+            join(project.path, local.filename),
+            local.parsed,
+            createResult.itemId,
+            projectInfo.project.id,
+            local.currentChecksum
+          );
+        }
+        created++;
       }
     } else {
       // Item exists both locally and remotely
@@ -262,6 +275,35 @@ async function pushProject(project: TrackedProject, dryRun: boolean): Promise<Pu
   }
 
   return { project, created, updated, deleted, unchanged };
+}
+
+/**
+ * Update a local file after creating it on GitHub.
+ * Sets the id, project_id, and _sync metadata.
+ */
+async function updateLocalFileWithId(
+  filePath: string,
+  parsed: ParsedMarkdown,
+  itemId: string,
+  projectId: string,
+  checksum: string
+): Promise<void> {
+  const { writeFile } = await import("fs/promises");
+
+  // Set the item ID and project ID
+  parsed.frontmatter.id = itemId;
+  parsed.frontmatter.project_id = projectId;
+
+  // Update the _sync metadata
+  const sync = (parsed.frontmatter._sync as Record<string, unknown>) || {};
+  sync.local_checksum = checksum;
+  sync.remote_updated_at = new Date().toISOString();
+  parsed.frontmatter._sync = sync;
+
+  // Re-serialize the file
+  const yaml = serializeFrontmatter(parsed.frontmatter);
+  const content = `---\n${yaml}---\n\n${parsed.body}`;
+  await writeFile(filePath, content);
 }
 
 /**

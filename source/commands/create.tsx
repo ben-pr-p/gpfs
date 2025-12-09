@@ -3,14 +3,15 @@ import { Text, Box } from "ink";
 import { z } from "zod";
 import { getBaseDir } from "../lib/config.js";
 import { sanitizeForFilesystem } from "../lib/filesystem.js";
-import { ghCreateProject } from "../lib/github.js";
+import { ghCreateProject, ghGetLoggedInUser } from "../lib/github.js";
 import { mkdir } from "fs/promises";
 import { join } from "path";
 
 export const options = z.object({
   owner: z
     .string()
-    .describe("Organization or user that owns the project"),
+    .optional()
+    .describe("Organization or user that owns the project (default: logged-in user)"),
   title: z
     .string()
     .describe("Title for the new project"),
@@ -39,10 +40,22 @@ export default function Create({ options }: Props) {
     async function create() {
       const baseDir = getBaseDir(options.baseDir);
 
-      // Create the project on GitHub
-      setState({ status: "creating", message: `Creating project "${options.title}" for ${options.owner}...` });
+      // Resolve owner - use provided value or get logged-in user
+      let owner = options.owner;
+      if (!owner) {
+        setState({ status: "creating", message: "Getting logged-in user..." });
+        const userResult = await ghGetLoggedInUser();
+        if (!userResult.success) {
+          setState({ status: "error", message: userResult.message });
+          return;
+        }
+        owner = userResult.login;
+      }
 
-      const result = await ghCreateProject(options.owner, options.title);
+      // Create the project on GitHub
+      setState({ status: "creating", message: `Creating project "${options.title}" for ${owner}...` });
+
+      const result = await ghCreateProject(owner, options.title);
 
       if (!result.success) {
         setState({ status: "error", message: result.message });
@@ -53,7 +66,7 @@ export default function Create({ options }: Props) {
 
       // Create local directory structure
       const sanitizedName = sanitizeForFilesystem(title);
-      const projectPath = join(baseDir, options.owner, `${number}-${sanitizedName}`);
+      const projectPath = join(baseDir, owner, `${number}-${sanitizedName}`);
 
       try {
         await mkdir(projectPath, { recursive: true });
@@ -68,7 +81,7 @@ export default function Create({ options }: Props) {
       setState({
         status: "success",
         project: {
-          owner: options.owner,
+          owner,
           number,
           title,
           path: projectPath,

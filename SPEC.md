@@ -31,11 +31,14 @@ Start tracking an existing GitHub Project.
 
 **Flags:**
 - `--interactive` - Interactively select from available projects
+- `--link [path]` - Create a symlink at the specified path (or current directory if path omitted) pointing to the project directory in `~/.gpfs/`
 
 **Example:**
 ```sh
 gpfs attach myorg/42
 gpfs attach --interactive
+gpfs attach myorg/42 --link ~/projects/roadmap   # Attach and create symlink
+gpfs attach myorg/42 --link                       # Attach and symlink to cwd
 ```
 
 ### `gpfs detach`
@@ -98,6 +101,50 @@ List all tracked projects.
 - Project name
 - Local directory path
 - Item count
+
+### `gpfs link`
+
+Create a symlink to a tracked project directory.
+
+**Arguments:**
+- `[owner/project-number]` - Project identifier. If omitted, interactively select from tracked projects.
+
+**Flags:**
+- `[path]` - Target path for symlink. Defaults to current working directory.
+- `--relative` - Create a relative symlink instead of absolute.
+
+**Behavior:**
+- Creates a symlink at `<path>` pointing to `~/.gpfs/<owner>/<number>-<name>/`
+- If `<path>` is a directory, creates symlink inside it using project name (e.g., `<path>/42-roadmap`)
+- Fails if target path already exists
+- Fails if project is not attached
+
+**Example:**
+```sh
+gpfs link myorg/42 ~/projects/roadmap    # Symlink at specific path
+gpfs link myorg/42                        # Symlink in current directory
+gpfs link                                 # Interactive project selection, symlink in cwd
+```
+
+### `gpfs unlink`
+
+Remove a symlink to a tracked project.
+
+**Arguments:**
+- `[path]` - Path to symlink to remove. Defaults to current working directory.
+
+**Behavior:**
+- Removes the symlink at `<path>`
+- Fails if path is not a symlink
+- Fails if symlink does not point to a gpfs project directory
+- Does not affect the actual project files in `~/.gpfs/`
+
+**Example:**
+```sh
+gpfs unlink ~/projects/roadmap    # Remove specific symlink
+gpfs unlink                        # Remove symlink at cwd (if cwd is a symlink)
+cd ~/projects/roadmap && gpfs unlink   # Remove symlink you're currently in
+```
 
 ### `gpfs status`
 
@@ -278,9 +325,12 @@ Configuration is via command-line flags and environment variables. No config fil
 1. Read all local markdown files for project
 2. For each local file:
    - If `_sync.local_checksum` differs from current content: push to GitHub
-   - If file is new (no `id` in frontmatter): create item on GitHub
+   - If file is new (no `id` in frontmatter, or `id` does not start with `PVTI_`): create item on GitHub, then set custom fields via `gh project item-edit`
+   - If file has `id` starting with `PVTI_` but item doesn't exist remotely: skip (item was deleted on GitHub; user should pull to get `deleted: true` status)
+   - If file has `deleted: true` and item exists remotely: delete item on GitHub
 3. For deleted local files (tracked in previous sync but now missing): delete from GitHub
 4. Update `_sync` metadata after successful push
+5. After creating a new item, update the local file with the assigned `id`
 
 ### Daemon Sync
 1. Watch filesystem for changes using Bun's cross-platform file watcher

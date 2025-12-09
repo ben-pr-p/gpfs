@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "bun run source/cli.tsx",
-    "build": "bunx tsc",
+    "build": "bunx tsc --noEmit false --outDir dist --allowImportingTsExtensions false",
     "start": "node dist/cli.js"
   },
   "devDependencies": {

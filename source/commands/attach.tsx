@@ -4,14 +4,19 @@ import { z } from "zod";
 import { getBaseDir } from "../lib/config.js";
 import { parseProjectIdentifier, sanitizeForFilesystem } from "../lib/filesystem.js";
 import { ghProjectView, type ProjectInfo } from "../lib/github.js";
-import { mkdir } from "fs/promises";
-import { join } from "path";
+import { createProjectSymlink } from "../lib/symlink.js";
+import { mkdir, stat } from "fs/promises";
+import { join, resolve } from "path";
 
 export const options = z.object({
   baseDir: z
     .string()
     .optional()
     .describe("Base directory for gpfs data (default: ~/.gpfs)"),
+  link: z
+    .string()
+    .optional()
+    .describe("Create symlink at path (use empty string for cwd)"),
 });
 
 export const args = z.tuple([
@@ -25,7 +30,7 @@ type Props = {
 
 type AttachState =
   | { status: "loading" }
-  | { status: "success"; project: ProjectInfo; path: string }
+  | { status: "success"; project: ProjectInfo; path: string; linkPath?: string }
   | { status: "error"; message: string };
 
 export default function Attach({ options, args }: Props) {
@@ -77,15 +82,44 @@ export default function Attach({ options, args }: Props) {
         return;
       }
 
+      // Create symlink if --link option provided
+      let linkPath: string | undefined;
+      if (options.link !== undefined) {
+        // Empty string means use cwd
+        let targetLinkPath = options.link === "" ? process.cwd() : resolve(options.link);
+
+        // If linkPath is an existing directory, put symlink inside it
+        try {
+          const stats = await stat(targetLinkPath);
+          if (stats.isDirectory()) {
+            targetLinkPath = join(targetLinkPath, `${projectInfo.number}-${sanitizedName}`);
+          }
+        } catch {
+          // Path doesn't exist, use as-is
+        }
+
+        try {
+          await createProjectSymlink(projectDir, targetLinkPath, false);
+          linkPath = targetLinkPath;
+        } catch (err) {
+          setState({
+            status: "error",
+            message: `Failed to create symlink: ${err instanceof Error ? err.message : String(err)}`,
+          });
+          return;
+        }
+      }
+
       setState({
         status: "success",
         project: projectInfo,
         path: projectDir,
+        linkPath,
       });
     }
 
     attach();
-  }, [args, options.baseDir]);
+  }, [args, options.baseDir, options.link]);
 
   if (state.status === "loading") {
     return <Text>Attaching project...</Text>;
@@ -108,6 +142,11 @@ export default function Attach({ options, args }: Props) {
         <Text>
           <Text bold>Path:</Text> {state.path}
         </Text>
+        {state.linkPath && (
+          <Text>
+            <Text bold>Symlink:</Text> {state.linkPath}
+          </Text>
+        )}
       </Box>
       <Box marginTop={1}>
         <Text dimColor>Run `gpfs pull {state.project.owner}/{state.project.number}` to sync items.</Text>
