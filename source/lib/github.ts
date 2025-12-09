@@ -309,6 +309,51 @@ export async function ghDeleteProject(
   return { success: true };
 }
 
+export type GhProjectListResult =
+  | { success: true; projects: ProjectInfo[] }
+  | { success: false; error: "missing_scope" | "other"; message: string };
+
+/**
+ * List all projects for an owner using `gh project list`.
+ */
+export async function ghProjectList(
+  owner: string
+): Promise<GhProjectListResult> {
+  const proc = Bun.spawn(
+    ["gh", "project", "list", "--owner", owner, "--format", "json", "--limit", "100"],
+    { stdout: "pipe", stderr: "pipe" }
+  );
+
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) {
+    const stderr = await new Response(proc.stderr).text();
+    if (stderr.includes("missing required scopes")) {
+      return {
+        success: false,
+        error: "missing_scope",
+        message: `GitHub CLI missing project scope. Run: gh auth refresh -s project`,
+      };
+    }
+    return {
+      success: false,
+      error: "other",
+      message: `Failed to list projects: ${stderr.trim()}`,
+    };
+  }
+
+  const stdout = await new Response(proc.stdout).text();
+  const data = JSON.parse(stdout);
+
+  const projects: ProjectInfo[] = data.projects.map((p: Record<string, unknown>) => ({
+    id: p.id as string,
+    number: p.number as number,
+    title: p.title as string,
+    owner: owner,
+  }));
+
+  return { success: true, projects };
+}
+
 export type GhDeleteItemResult =
   | { success: true }
   | { success: false; error: "not_found" | "other"; message: string };
